@@ -1,7 +1,10 @@
 ﻿// ReSharper disable CppClangTidyClangDiagnosticMicrosoftCast
 #include "GameHooks.h"
 
+#include <format>
 #include <string>
+#include <WinSock2.h>
+#include <iphlpapi.h>
 #include <windows.h>
 
 #include "injector.hpp"
@@ -13,6 +16,7 @@ static uint8_t gClientMode = 2;
 static std::string gSerial = "284311110001";
 static const auto BASE_ADDRESS = 0x140000000;
 static HANDLE hConnection = (HANDLE)0x1337;
+static std::string gAdapterName = "";
 
 static HWND (WINAPI* CreateWindowExWOri)(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
 static HWND WINAPI CreateWindowExWHook(DWORD dwExStyle, LPCWSTR lpClassName, LPCWSTR lpWindowName, DWORD dwStyle, int X, int Y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam)
@@ -30,13 +34,13 @@ static HWND WINAPI CreateWindowExWHook(DWORD dwExStyle, LPCWSTR lpClassName, LPC
 }
 
 static BOOL(WINAPI* ShowCursorOri)(BOOL bShow);
-static BOOL WINAPI ShowCursorHook(BOOL bShow)
+[[maybe_unused]]static BOOL WINAPI ShowCursorHook(BOOL bShow)
 {
     return ShowCursorOri(true);
 }
 
 static BOOL(WINAPI* MoveWindowOri)(HWND hWnd, int X, int Y, int nWidth, int  nHeight, BOOL bRepaint);
-static BOOL WINAPI MoveWindowHook(HWND hWnd, int X, int Y, int nWidth, int  nHeight, BOOL bRepaint)
+[[maybe_unused]]static BOOL WINAPI MoveWindowHook(HWND hWnd, int X, int Y, int nWidth, int  nHeight, BOOL bRepaint)
 {
     if (nWidth > 0 && nHeight > 0)
     {
@@ -172,6 +176,85 @@ static int64_t __fastcall nbamUsbFinderGetSerialNumber(int a1, char* a2)
     return 0;
 }
 
+static ULONG (*gOriGetAdaptersInfo)(
+  PIP_ADAPTER_INFO AdapterInfo,
+  PULONG           SizePointer
+);
+
+ULONG GetAdaptersInfoHook(
+  PIP_ADAPTER_INFO AdapterInfo,
+  PULONG           SizePointer
+)
+{
+    OutputDebugStringA("GetAdaptersInfo");
+    if (gOriGetAdaptersInfo(AdapterInfo, SizePointer) == ERROR_BUFFER_OVERFLOW)
+    {
+        return ERROR_BUFFER_OVERFLOW;
+    }
+    if (gOriGetAdaptersInfo(AdapterInfo, SizePointer) == NO_ERROR)
+    {
+        // Search for the adapter whose adapter name contains gAdapterName
+        auto pAdapterInfo = AdapterInfo;
+        while (pAdapterInfo)
+        {
+            OutputDebugStringA(std::format("Adapter name in info: {}", pAdapterInfo->Description).c_str());
+            if (strstr(pAdapterInfo->Description, gAdapterName.c_str()))
+            {
+                OutputDebugStringA("Adapter info match");
+                // Set it as the only adapter to return
+                pAdapterInfo->Next = nullptr;
+                *AdapterInfo = *pAdapterInfo;
+                *SizePointer = sizeof(IP_ADAPTER_INFO);
+                return NO_ERROR;
+            }
+            pAdapterInfo = pAdapterInfo->Next;
+        }
+    }
+    return gOriGetAdaptersInfo(AdapterInfo, SizePointer);
+}
+
+static ULONG (*gOriGetAdaptersAddresses)(
+    ULONG                 Family,
+    ULONG                 Flags,
+    PVOID                 Reserved,
+    PIP_ADAPTER_ADDRESSES AdapterAddresses,
+    PULONG                SizePointer
+);
+
+ULONG GetAdaptersAddressesHook(
+  ULONG                 Family,
+  ULONG                 Flags,
+  PVOID                 Reserved,
+  PIP_ADAPTER_ADDRESSES AdapterAddresses,
+  PULONG                SizePointer
+)
+{
+    OutputDebugStringA("GetAdaptersAddressesHook");
+    if (gOriGetAdaptersAddresses(Family, Flags, Reserved, AdapterAddresses, SizePointer) == ERROR_BUFFER_OVERFLOW)
+    {
+        return ERROR_BUFFER_OVERFLOW;
+    }
+    if (gOriGetAdaptersAddresses(Family, Flags, Reserved, AdapterAddresses, SizePointer) == NO_ERROR)
+    {
+        // Search for the adapter whose adapter name contains gAdapterName
+        auto pAdapterAddresses = AdapterAddresses;
+        while (pAdapterAddresses)
+        {
+            OutputDebugStringW(std::format(L"Adapter name in address: {}", pAdapterAddresses->Description).c_str());
+            if (wcsstr(pAdapterAddresses->Description, std::wstring(gAdapterName.begin(), gAdapterName.end()).c_str()))
+            {
+                OutputDebugStringA("Adapter address match");
+                // Set it as the only adapter to return
+                pAdapterAddresses->Next = nullptr;
+                *AdapterAddresses = *pAdapterAddresses;
+                *SizePointer = sizeof(IP_ADAPTER_ADDRESSES);
+                return NO_ERROR;
+            }
+            pAdapterAddresses = pAdapterAddresses->Next;
+        }
+    }
+    return gOriGetAdaptersAddresses(Family, Flags, Reserved, AdapterAddresses, SizePointer);
+}
 
 void InitializeHooks()
 {
@@ -186,6 +269,9 @@ void InitializeHooks()
     MH_CreateHookApi(L"kernel32.dll", "CreateFileW", CreateFileWHook, reinterpret_cast<void**>(&CreateFileWOri));
     MH_CreateHookApi(L"kernel32.dll", "CreateFileA", CreateFileAHook, reinterpret_cast<void**>(&CreateFileAOri));
     MH_CreateHookApi(L"kernel32.dll", "GetDriveTypeA", GetDriveTypeAHook, reinterpret_cast<void**>(&GetDriveTypeAOri));
+
+    MH_CreateHookApi(L"iphlpapi.dll", "GetAdaptersInfo", GetAdaptersInfoHook, reinterpret_cast<void**>(&gOriGetAdaptersInfo));
+    MH_CreateHookApi(L"iphlpapi.dll", "GetAdaptersAddresses", GetAdaptersAddressesHook, reinterpret_cast<void**>(&gOriGetAdaptersAddresses));
     
     MH_CreateHookApi(L"shlwapi.dll", "PathFileExistsA", PathFileExistsAHook, reinterpret_cast<void**>(&PathFileExistsAOri));
 
@@ -201,8 +287,9 @@ void InitializeHooks()
     INIReader reader("config.ini");
     if (reader.ParseError() == 0)
     {
-        gClientMode = reader.GetInteger("config", "mode", 2);
+        gClientMode = static_cast<uint8_t>(reader.GetInteger("config", "mode", 2));
         gSerial = reader.Get("config", "serial", "284311110001");
+        gAdapterName = reader.Get("config", "AdapterName", "");
     }
 
     auto exeBase = reinterpret_cast<uintptr_t>(GetModuleHandle(nullptr));
