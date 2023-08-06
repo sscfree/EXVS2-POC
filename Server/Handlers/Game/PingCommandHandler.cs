@@ -17,8 +17,8 @@ public class PingCommandHandler : IRequestHandler<PingCommand, Response>
             ping = new Response.Ping
             {
                 GameServer = true,
-                AcidServer = false,
-                MatchmakingServer = false,
+                AcidServer = true,
+                MatchmakingServer = true,
                 ResponseAt = (ulong)DateTimeOffset.Now.ToUnixTimeSeconds()
             }
         });

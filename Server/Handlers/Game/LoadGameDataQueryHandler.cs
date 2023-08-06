@@ -89,6 +89,20 @@ public class LoadGameDataQueryHandler : IRequestHandler<LoadGameDataQuery, Respo
                     MatchingBorder = 0,
                     MobileSuitBlocklists = Array.Empty<uint>()
                 }
+                // Testing Medal Info
+                // medal_info = new Response.LoadGameData.MedalInfo
+                // {
+                //     OpenedAt = (ulong)(DateTimeOffset.Now - TimeSpan.FromDays(10)).ToUnixTimeSeconds(),
+                //     ExpiredAt = (ulong)(DateTimeOffset.Now + TimeSpan.FromDays(365)).ToUnixTimeSeconds(),
+                //     ResultAt = (ulong)(DateTimeOffset.Now + TimeSpan.FromDays(366)).ToUnixTimeSeconds(),
+                //     NormalMedal = 1,
+                //     PlusCoinMedal = 1,
+                //     RevengeMedal = 1,
+                //     ContinueMedal = 1,
+                //     ReserveMedal = 1,
+                //     LocationMedal = 1,
+                //     RewardMedal = 1
+                // }
             }
         };
         

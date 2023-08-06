@@ -21,12 +21,24 @@ public class RegisterPcbCommandHandler : IRequestHandler<RegisterPcbCommand, Res
                 NextMaintenanceStartAt = 2005364002,
                 NextMaintenanceEndAt = 2005364004,
                 SramClear = true,
-                // LmIpAddresses = {"192.168.50.239"},
+                LmIpAddresses = {"192.168.1.27", "26.30.17.2", "26.30.17.29"},
                 ServerInfoes =
                 {
                     new Response.RegisterPcb.ServerInfo
                     {
                         ServerType = ServerType.SrvMatch,
+                        Uri = $"{command.BaseAddress}/match",
+                        Port = 12345
+                    },
+                    new Response.RegisterPcb.ServerInfo
+                    {
+                        ServerType = ServerType.SrvStun,
+                        Uri = $"{command.BaseAddress}/match",
+                        Port = 12345
+                    },
+                    new Response.RegisterPcb.ServerInfo
+                    {
+                        ServerType = ServerType.SrvTurn,
                         Uri = $"{command.BaseAddress}/match",
                         Port = 12345
                     }

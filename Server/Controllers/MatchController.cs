@@ -27,7 +27,7 @@ public class MatchController : BaseController<MatchController>
             case MethodType.IssueNodeId:
                 response.issue_node_id = new Response.IssueNodeId
                 {
-                    NodeIds = new []{1u}
+                    NodeIds = new []{1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u}
                 };
                 return Ok(response);
             case MethodType.EntryMatching:
@@ -35,6 +35,7 @@ public class MatchController : BaseController<MatchController>
             case MethodType.CancelMatching:
             case MethodType.MatchingSetting:
             default:
+                Logger.LogWarning("Unhandled case in Match: {Type}", request.Type);
                 return NotFound();
         }
     }
